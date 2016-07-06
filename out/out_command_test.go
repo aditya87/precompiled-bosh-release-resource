@@ -1,6 +1,11 @@
 package out_test
 
-import "io/ioutil"
+import (
+	"io/ioutil"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
 
 var _ = Describe("Out Command", func() {
 	Describe("Happy path", func() {
