@@ -8,7 +8,7 @@ type OutRequest struct {
 }
 
 type Params struct {
-	ReleaseDir      string `json:"release_dir"`
-	StemcellName    string `json:"stemcell_name"`
-	StemcellVersion string `json:"stemcell_version"`
+	ReleaseDir     string `json:"release_dir"`
+	ReleaseVersion string `json:"release_version"`
+	StemcellDir    string `json:"stemcell_dir"`
 }
