@@ -1,0 +1,198 @@
+package compiler_test
+
+import (
+	"archive/tar"
+	"bufio"
+	"bytes"
+	"compress/gzip"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/pivotal-cf/pcf-releng-ci/tasks/future/compile-release/compiler"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("Stemcell", func() {
+	Describe("NewStemcell", func() {
+		var tempDir string
+
+		BeforeEach(func() {
+			var err error
+			tempDir, err = ioutil.TempDir("", "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			err := os.RemoveAll(tempDir)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when parsing version numbers", func() {
+			It("can parse a one-part version number", func() {
+				path := filepath.Join(tempDir, "stemcell.tgz")
+				err := createStemcellTarball(path, bytes.NewBuffer([]byte(`---
+operating_system: one-part-version
+version: 1
+`)))
+
+				stemcell, err := compiler.NewStemcell(path)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stemcell.Name).To(Equal("one-part-version"))
+				Expect(stemcell.Semver).To(Equal(compiler.Semver{
+					Major: 1,
+				}))
+			})
+
+			It("can parse a two-part version number", func() {
+				path := filepath.Join(tempDir, "stemcell.tgz")
+				err := createStemcellTarball(path, bytes.NewBuffer([]byte(`---
+operating_system: two-part-version
+version: 1.2
+`)))
+
+				stemcell, err := compiler.NewStemcell(path)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stemcell.Name).To(Equal("two-part-version"))
+				Expect(stemcell.Semver).To(Equal(compiler.Semver{
+					Major: 1,
+					Minor: 2,
+				}))
+			})
+
+			It("can parse a three-part version number", func() {
+				path := filepath.Join(tempDir, "stemcell.tgz")
+				err := createStemcellTarball(path, bytes.NewBuffer([]byte(`---
+operating_system: three-part-version
+version: 1.2.3
+`)))
+
+				stemcell, err := compiler.NewStemcell(path)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(stemcell.Name).To(Equal("three-part-version"))
+				Expect(stemcell.Semver).To(Equal(compiler.Semver{
+					Major: 1,
+					Minor: 2,
+					Patch: 3,
+				}))
+			})
+		})
+
+		Context("failure cases", func() {
+			Context("when the stemcell tarball does not exist", func() {
+				It("returns an error", func() {
+					_, err := compiler.NewStemcell("some-stemcell-1.tgz")
+					Expect(err).To(MatchError(ContainSubstring("no such file or directory")))
+				})
+			})
+
+			Context("when the stemcell tarball is not gzipped", func() {
+				It("returns an error", func() {
+					path := filepath.Join(tempDir, "stemcell.tgz")
+					err := ioutil.WriteFile(path, []byte("not gzipped"), 0644)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = compiler.NewStemcell(path)
+					Expect(err).To(MatchError("gzip: invalid header"))
+				})
+			})
+
+			Context("when the header file is corrupt", func() {
+				It("returns an error", func() {
+					path := filepath.Join(tempDir, "stemcell.tgz")
+					tarball, err := os.Create(path)
+					Expect(err).NotTo(HaveOccurred())
+
+					gw := gzip.NewWriter(tarball)
+					tw := tar.NewWriter(gw)
+
+					err = tw.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = gw.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = compiler.NewStemcell(path)
+					Expect(err).To(MatchError(fmt.Sprintf("could not find stemcell.MF in %q", path)))
+				})
+			})
+
+			Context("when there is no stemcell.MF", func() {
+				It("returns an error", func() {
+					path := filepath.Join(tempDir, "stemcell.tgz")
+					tarball, err := os.Create(path)
+					Expect(err).NotTo(HaveOccurred())
+
+					gw := gzip.NewWriter(tarball)
+					tw := tar.NewWriter(gw)
+
+					stemcellManifest := bytes.NewBuffer([]byte(`---
+operating_system: stemcell
+version: 1.2.3
+`))
+
+					header := &tar.Header{
+						Name:    "./someotherfile.MF",
+						Size:    int64(stemcellManifest.Len()),
+						Mode:    int64(0644),
+						ModTime: time.Now(),
+					}
+
+					err = tw.WriteHeader(header)
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = io.Copy(tw, stemcellManifest)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = tw.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = gw.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = compiler.NewStemcell(path)
+					Expect(err).To(MatchError(fmt.Sprintf("could not find stemcell.MF in %q", path)))
+				})
+			})
+
+			Context("when the tarball is corrupt", func() {
+				It("returns an error", func() {
+					path := filepath.Join(tempDir, "stemcell.tgz")
+					tarball, err := os.Create(path)
+					Expect(err).NotTo(HaveOccurred())
+
+					gw := gzip.NewWriter(tarball)
+					tw := bufio.NewWriter(gw)
+
+					_, err = tw.WriteString("I am a banana!")
+					Expect(err).NotTo(HaveOccurred())
+
+					err = tw.Flush()
+					Expect(err).NotTo(HaveOccurred())
+
+					err = gw.Close()
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = compiler.NewStemcell(path)
+					Expect(err).To(MatchError(fmt.Sprintf("error while reading %q: unexpected EOF", path)))
+				})
+			})
+
+			Context("when the stemcell manifest is not YAML", func() {
+				It("returns an error", func() {
+					path := filepath.Join(tempDir, "stemcell.tgz")
+					err := createStemcellTarball(path, bytes.NewBuffer([]byte("%%%%%")))
+					Expect(err).NotTo(HaveOccurred())
+
+					_, err = compiler.NewStemcell(path)
+					Expect(err).To(MatchError("yaml: could not find expected directive name"))
+				})
+			})
+		})
+	})
+})

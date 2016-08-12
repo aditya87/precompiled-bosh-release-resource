@@ -88,4 +88,9 @@ version: 1.2.3
 			Expect(actualContents).To(Equal(expectedContents))
 		})
 	})
+
+	Describe("UploadRelease", func() {
+		It("uploads the release to the bosh director", func() {
+		})
+	})
 })
