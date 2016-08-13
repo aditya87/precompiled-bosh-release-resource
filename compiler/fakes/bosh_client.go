@@ -26,7 +26,8 @@ type BOSHClient struct {
 	}
 
 	UploadStemcellCall struct {
-		Receives struct {
+		CallCount int
+		Receives  struct {
 			Contents bosh.SizeReader
 		}
 		Returns struct {
@@ -139,6 +140,7 @@ func (c *BOSHClient) UploadRelease(contents bosh.SizeReader) (int, error) {
 }
 
 func (c *BOSHClient) UploadStemcell(contents bosh.SizeReader) (int, error) {
+	c.UploadStemcellCall.CallCount++
 	c.UploadStemcellCall.Receives.Contents = contents
 
 	return c.UploadStemcellCall.Returns.TaskID, c.UploadStemcellCall.Returns.Error
@@ -162,7 +164,7 @@ func (c *BOSHClient) Deployments() ([]bosh.Deployment, error) {
 	return c.DeploymentsCall.Returns.DeploymentList, c.DeploymentsCall.Returns.Error
 }
 
-func (c *BOSHClient) Stemcell(name string) (Stemcell, error) {
+func (c *BOSHClient) Stemcell(name string) (bosh.Stemcell, error) {
 	c.StemcellCall.CallCount++
 	c.StemcellCall.Receives = name
 

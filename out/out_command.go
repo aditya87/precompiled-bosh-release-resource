@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 
 	"github.com/aditya87/precompiled-bosh-release-resource/compiler"
 	"github.com/pivotal-cf-experimental/bosh-test/bosh"
@@ -26,10 +27,20 @@ type boshClient interface {
 	DeleteDeployment(name string) error
 	Cleanup() (taskID int, err error)
 	Deployments() (deploymentList []bosh.Deployment, err error)
+	Stemcell(name string) (bosh.Stemcell, error)
 }
 
 type manifestGenerator interface {
 	Generate(directorUUID, deploymentName string, release compiler.Release, stemcell compiler.Stemcell) (manifest []byte, err error)
+}
+
+func existsInSlice(slice []string, str string) bool {
+	for _, x := range slice {
+		if x == str {
+			return true
+		}
+	}
+	return false
 }
 
 func NewOutCommand(request OutRequest) *OutCommand {
@@ -51,12 +62,24 @@ func (o *OutCommand) UploadStemcell() error {
 	if err != nil {
 		panic(err)
 	}
+
 	stemcellTarballPath := filepath.Join(o.stemcellDir, stemcellDirInfo[0].Name())
 	stemcell, err := compiler.NewStemcell(stemcellTarballPath)
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = o.BOSHClient.UploadStemcell(stemcell)
-	return err
+	existingStemcell, err := o.BOSHClient.Stemcell(stemcell.Name)
+	if err != nil && !strings.Contains(err.Error(), "could not be found") {
+		panic(err)
+	} else if err != nil && strings.Contains(err.Error(), "could not be found") {
+		_, err = o.BOSHClient.UploadStemcell(stemcell)
+		return err
+	} else {
+		if existingStemcell.Name == stemcell.Name && !existsInSlice(existingStemcell.Versions, stemcell.Version) {
+			_, err = o.BOSHClient.UploadStemcell(stemcell)
+			return err
+		}
+		return nil
+	}
 }

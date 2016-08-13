@@ -2,6 +2,7 @@ package out_test
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/aditya87/precompiled-bosh-release-resource/out"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/pivotal-cf-experimental/bosh-test/bosh"
 )
 
 var _ = Describe("Out Command", func() {
@@ -74,23 +76,50 @@ version: 1.2.3
 	})
 
 	Describe("UploadStemcell", func() {
-		It("uploads the stemcell to the bosh director", func() {
-			err := command.UploadStemcell()
-			Expect(err).NotTo(HaveOccurred())
+		Context("The stemcell does not already exist on the bosh director", func() {
+			BeforeEach(func() {
+				boshClient.StemcellCall.Returns.Stemcell = bosh.Stemcell{}
+				boshClient.StemcellCall.Returns.Error = fmt.Errorf("stemcell some-stemcell could not be found")
+			})
 
-			Expect(boshClient.UploadStemcellCall.Receives.Contents).NotTo(BeNil())
-			actualContents, err := ioutil.ReadAll(boshClient.UploadStemcellCall.Receives.Contents)
-			Expect(err).NotTo(HaveOccurred())
+			It("uploads the stemcell to the bosh director", func() {
+				err := command.UploadStemcell()
+				Expect(err).NotTo(HaveOccurred())
 
-			expectedContents, err := ioutil.ReadFile(stemcellTarball)
-			Expect(err).NotTo(HaveOccurred())
+				Expect(boshClient.StemcellCall.CallCount).To(Equal(1))
+				Expect(boshClient.StemcellCall.Receives).To(Equal("some-stemcell"))
+				Expect(boshClient.UploadStemcellCall.Receives.Contents).NotTo(BeNil())
+				actualContents, err := ioutil.ReadAll(boshClient.UploadStemcellCall.Receives.Contents)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(actualContents).To(Equal(expectedContents))
+				expectedContents, err := ioutil.ReadFile(stemcellTarball)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(actualContents).To(Equal(expectedContents))
+			})
+		})
+
+		Context("The stemcell already exists on the bosh director", func() {
+			BeforeEach(func() {
+				boshClient.StemcellCall.Returns.Stemcell = bosh.Stemcell{
+					Name:     "some-stemcell",
+					Versions: []string{"1.2.3"},
+				}
+				boshClient.StemcellCall.Returns.Error = nil
+			})
+
+			It("does not upload the stemcell to the bosh director", func() {
+				err := command.UploadStemcell()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(boshClient.StemcellCall.CallCount).To(Equal(1))
+				Expect(boshClient.StemcellCall.Receives).To(Equal("some-stemcell"))
+				Expect(boshClient.UploadStemcellCall.CallCount).To(Equal(0))
+			})
 		})
 	})
 
-	Describe("UploadRelease", func() {
+	/*Describe("UploadRelease", func() {
 		It("uploads the release to the bosh director", func() {
 		})
-	})
+	})*/
 })
