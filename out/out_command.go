@@ -89,7 +89,7 @@ func (o *OutCommand) UploadStemcell() error {
 
 func (o *OutCommand) CreateRelease() error {
 	matches := regexp.MustCompile("(.*)/(.*)$").FindStringSubmatch(o.releaseDir)
-	createReleaseCmd := exec.Command("bosh", "create", "release", "--force", "--name", matches[len(matches)-1], "--with-tarball")
+	createReleaseCmd := exec.Command("bosh", "create", "release", "--force", "--name", matches[len(matches)-1], "--version", o.releaseVersion, "--with-tarball")
 	createReleaseCmd.Dir = o.releaseDir
 	err := os.RemoveAll(filepath.Join(o.releaseDir, "dev_releases"))
 	if err != nil {

@@ -147,14 +147,9 @@ version: 1.2.3`)))
 			releaseName := matches[len(matches)-1]
 			err := command.CreateRelease()
 			Expect(err).NotTo(HaveOccurred())
-			expectedReleasePath := filepath.Join(releaseDirPath, fmt.Sprintf("dev_releases/%s/%s-0+dev.1.tgz", releaseName, releaseName))
+			expectedReleasePath := filepath.Join(releaseDirPath, fmt.Sprintf("dev_releases/%s/%s-%s.tgz", releaseName, releaseName, releaseVersion))
 			Expect(expectedReleasePath).To(BeAnExistingFile())
 			Expect(filepath.Join(releaseDirPath, "dev_releases/foo")).NotTo(BeADirectory())
-		})
-	})
-
-	Describe("UploadDevRelease", func() {
-		It("uploads the created release", func() {
 		})
 	})
 })
