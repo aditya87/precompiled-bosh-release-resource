@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/aditya87/precompiled-bosh-release-resource"
 	"github.com/aditya87/precompiled-bosh-release-resource/compiler/fakes"
@@ -31,20 +32,42 @@ var _ = Describe("Out Command", func() {
 	)
 
 	BeforeEach(func() {
+		var err error
 		boshTarget = "http://fake-bosh-target"
 		boshUser = "fake-bosh-user"
 		boshPassword = "fake-bosh-password"
 		releaseVersion = "45"
-		releaseDirPath, err := ioutil.TempDir("", "fake-bosh-release")
+		releaseDirPath, err = ioutil.TempDir("", "fake-bosh-release")
 		Expect(err).ToNot(HaveOccurred())
+		err = os.Chmod(releaseDirPath, 0700)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = os.Chdir(releaseDirPath)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = os.Mkdir("blobs", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("config", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("jobs", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("packages", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("src", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("dev_releases", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		err = os.Mkdir("dev_releases/foo", 0700)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(filepath.Join(releaseDirPath, "dev_releases/foo")).To(BeADirectory())
+
 		stemcellDirPath, err = ioutil.TempDir("", "stemcell-dir")
 		Expect(err).ToNot(HaveOccurred())
 
 		stemcellTarball = filepath.Join(stemcellDirPath, "some-stemcell-1.2.3.tgz")
 		err = createStemcellTarball(stemcellTarball, bytes.NewBuffer([]byte(`---
 operating_system: some-stemcell
-version: 1.2.3
-`)))
+version: 1.2.3`)))
 		Expect(err).NotTo(HaveOccurred())
 
 		boshClient = &fakes.BOSHClient{}
@@ -118,8 +141,20 @@ version: 1.2.3
 		})
 	})
 
-	/*Describe("UploadRelease", func() {
-		It("uploads the release to the bosh director", func() {
+	Describe("CreateRelease", func() {
+		It("creates release with tarball", func() {
+			matches := regexp.MustCompile("(.*)/(.*)$").FindStringSubmatch(releaseDirPath)
+			releaseName := matches[len(matches)-1]
+			err := command.CreateRelease()
+			Expect(err).NotTo(HaveOccurred())
+			expectedReleasePath := filepath.Join(releaseDirPath, fmt.Sprintf("dev_releases/%s/%s-0+dev.1.tgz", releaseName, releaseName))
+			Expect(expectedReleasePath).To(BeAnExistingFile())
+			Expect(filepath.Join(releaseDirPath, "dev_releases/foo")).NotTo(BeADirectory())
 		})
-	})*/
+	})
+
+	Describe("UploadDevRelease", func() {
+		It("uploads the created release", func() {
+		})
+	})
 })

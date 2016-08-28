@@ -3,7 +3,10 @@ package out
 import (
 	"io"
 	"io/ioutil"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/aditya87/precompiled-bosh-release-resource/compiler"
@@ -82,4 +85,20 @@ func (o *OutCommand) UploadStemcell() error {
 		}
 		return nil
 	}
+}
+
+func (o *OutCommand) CreateRelease() error {
+	matches := regexp.MustCompile("(.*)/(.*)$").FindStringSubmatch(o.releaseDir)
+	createReleaseCmd := exec.Command("bosh", "create", "release", "--force", "--name", matches[len(matches)-1], "--with-tarball")
+	createReleaseCmd.Dir = o.releaseDir
+	err := os.RemoveAll(filepath.Join(o.releaseDir, "dev_releases"))
+	if err != nil {
+		panic(err)
+	}
+
+	err = createReleaseCmd.Run()
+	if err != nil {
+		panic(err)
+	}
+	return nil
 }
