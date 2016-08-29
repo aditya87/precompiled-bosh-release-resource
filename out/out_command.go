@@ -102,3 +102,10 @@ func (o *OutCommand) CreateRelease() error {
 	}
 	return nil
 }
+
+func (o *OutCommand) uploadDevRelease() error {
+	uploadReleaseCmd := exec.Command("bosh", "upload", "release")
+	uploadReleaseCmd.Dir = o.releaseDir
+	err := uploadReleaseCmd.Run()
+	return err
+}
