@@ -161,7 +161,7 @@ version: 42
 		})
 	})
 
-	Describe("Run", func() {
+	FDescribe("Run", func() {
 		BeforeEach(func() {
 			boshClient.InfoCall.Returns.DirectorInfo = bosh.DirectorInfo{
 				UUID: "some-director-uuid",
@@ -184,6 +184,20 @@ version: 42
 			Expect(boshClient.DeleteDeploymentCall.Receives.Name[1]).To(Equal("dep2"))
 		})
 
+		It("uploads the release to the bosh director", func() {
+			err := command.Run()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(boshClient.UploadReleaseCall.Receives.Contents).NotTo(BeNil())
+			actualContents, err := ioutil.ReadAll(boshClient.UploadReleaseCall.Receives.Contents)
+			Expect(err).NotTo(HaveOccurred())
+
+			expectedContents, err := ioutil.ReadFile(filepath.Join(releaseDirPath, fmt.Sprintf("dev_releases/%s/%s-%s.tgz", releaseName, releaseName, releaseVersion)))
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(actualContents).To(Equal(expectedContents))
+		})
+
 		It("generates a deployment manifest", func() {
 			err := command.Run()
 			Expect(err).NotTo(HaveOccurred())
@@ -202,7 +216,7 @@ version: 42
 		})
 
 		It("exports the release", func() {
-			err := app.Run()
+			err := command.Run()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(boshClient.ExportReleaseCall.Receives.DeploymentName).To(Equal("compile-release-some-guid"))
@@ -212,57 +226,12 @@ version: 42
 			Expect(boshClient.ExportReleaseCall.Receives.StemcellVersion).To(Equal("1.2.3"))
 		})
 
-		It("downloads the compiled release", func() {
-			err := app.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(boshClient.ResourceCall.Receives.ResourceID).To(Equal("some-resource-guid"))
-		})
-
-		It("writes the compiled release out to the given path", func() {
-			err := app.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			compiledReleaseContents, err := ioutil.ReadFile(filepath.Join(compiledTempDir, fmt.Sprintf("%s-%s-1.2.3.tgz", releaseName, releaseVersion)))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(compiledReleaseContents).To(Equal([]byte("compiled-release-contents")))
-		})
-
 		It("deletes the deployment", func() {
-			err := app.Run()
+			err := command.Run()
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(boshClient.DeleteDeploymentCall.Receives.Name)).To(Equal(1))
 			Expect(boshClient.DeleteDeploymentCall.Receives.Name[0]).To(Equal("compile-release-some-guid"))
-		})
-
-		It("cleans up the director", func() {
-			err := app.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(boshClient.CleanupCall.CallCount).To(Equal(2))
-		})
-
-		It("logs all of the steps", func() {
-			err := app.Run()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(logger.Lines).To(Equal([]string{
-				"deleting existing deployments\n",
-				"preparing compiler\n",
-				"fetching bosh director information\n",
-				"generating deployment name\n",
-				"parsing release details\n",
-				"parsing stemcell details\n",
-				"uploading stemcell some-stemcell 1.2.3\n",
-				"uploading release some-release 42\n",
-				"generating deployment manifest\n",
-				"deploying to bosh director\n",
-				"compiling the release\n",
-				"downloading the compiled release\n",
-				"deleting the deployment\n",
-				"cleaning up\n",
-			}))
 		})
 	})
 
